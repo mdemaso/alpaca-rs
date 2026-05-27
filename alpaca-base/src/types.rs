@@ -159,6 +159,8 @@ pub enum AssetClass {
     UsEquity,
     /// Cryptocurrency.
     Crypto,
+    /// US options (OCC-format contract symbols).
+    UsOption,
 }
 
 /// Asset status.
@@ -5955,6 +5957,20 @@ mod tests {
         let status = AssetStatus::Active;
         let json = serde_json::to_string(&status).unwrap();
         assert_eq!(json, "\"active\"");
+    }
+
+    #[test]
+    fn test_asset_class_serialization_round_trip() {
+        for (variant, expected) in [
+            (AssetClass::UsEquity, "\"us_equity\""),
+            (AssetClass::Crypto, "\"crypto\""),
+            (AssetClass::UsOption, "\"us_option\""),
+        ] {
+            let json = serde_json::to_string(&variant).unwrap();
+            assert_eq!(json, expected);
+            let back: AssetClass = serde_json::from_str(&json).unwrap();
+            assert_eq!(back, variant);
+        }
     }
 
     #[test]
