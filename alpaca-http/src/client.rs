@@ -230,7 +230,22 @@ impl AlpacaHttpClient {
             });
         }
 
-        // Parse successful response
+        // Parse successful response. HTTP 204 No Content (returned by
+        // endpoints like DELETE /v2/orders/{id}) ships an empty body —
+        // feeding that to serde fails with "EOF while parsing a value
+        // at line 1 column 0." For these calls the caller expects `()`,
+        // which deserializes cleanly from the `null` literal. Anything
+        // else (Vec, struct) still errors on null with an informative
+        // message, which is the right outcome — Alpaca only sends 204
+        // on calls that return no data.
+        if response_text.is_empty() {
+            return serde_json::from_str("null").map_err(|e| {
+                AlpacaError::Json(format!(
+                    "Failed to parse empty success response (status {}): {}",
+                    status.as_u16(), e
+                ))
+            });
+        }
         serde_json::from_str(&response_text).map_err(|e| {
             AlpacaError::Json(format!(
                 "Failed to parse response: {} - Response: {}",
@@ -340,6 +355,16 @@ struct ApiErrorResponseBody {
 mod tests {
     use super::*;
     use alpaca_base::types::Environment;
+
+    #[test]
+    fn test_empty_body_deserializes_to_unit() {
+        // HTTP 204 No Content (cancel_order, etc.) ships an empty body.
+        // The handle_response path treats that as a `null` literal so
+        // unit-typed callers get Ok(()) instead of an EOF parse error.
+        // This test pins that serde behavior directly.
+        let unit: () = serde_json::from_str("null").expect("`()` parses from null");
+        let _ = unit;
+    }
 
     #[test]
     fn test_build_url() {
